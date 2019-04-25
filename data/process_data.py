@@ -3,14 +3,35 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 def load_data(messages_filepath, categories_filepath):
+    """ Load and combine datasets as one dataframe
+
+    Args:
+        messages_filepath: file path for messages csv
+        categories_filepath: file path for categories csv
+    
+    Returns:
+        A dataframe containing messages and categories data
+
+    """
     # read data into separate dataframes
     df_messages = pd.read_csv(messages_filepath)
     df_categories = pd.read_csv(categories_filepath)
+    
     # return the joint dataframe
     return pd.merge(df_messages, df_categories, on=['id'])
 
 
 def clean_data(df):
+    """ Clean the dataset prior to model building
+
+    Args:
+        df: merged dataset
+    
+    Returns:
+        cleaned dataframe
+
+    """
+
     # create a dataframe of the 36 individual category columns
     categories = df.categories.str.split(pat=';', expand=True)
     # select the first row of the categories dataframe
@@ -37,9 +58,21 @@ def clean_data(df):
 
     return df
 
+
 def save_data(df, database_filename):
+    """ Save data into sqlite database
+
+    Args:
+        df: cleaned dataframe
+        database_filename: filename for sqlite db
+
+    Returns:
+        None
+
+    """
+
     engine = create_engine('sqlite:///' + database_filename)
-    df.to_sql('message', engine, index=False) 
+    df.to_sql('message', engine, index=False, if_exists='replace') 
 
 
 def main():
