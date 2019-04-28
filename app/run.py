@@ -4,6 +4,7 @@ import pandas as pd
 
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
 
 from flask import Flask
 from flask import render_template, request, jsonify
@@ -18,19 +19,22 @@ def tokenize(text):
     tokens = word_tokenize(text)
     lemmatizer = WordNetLemmatizer()
 
+    stop_words = set(stopwords.words('english'))
+
     clean_tokens = []
     for tok in tokens:
         clean_tok = lemmatizer.lemmatize(tok).lower().strip()
-        clean_tokens.append(clean_tok)
+        if clean_tok not in stop_words:
+            clean_tokens.append(clean_tok)
 
     return clean_tokens
 
 # load data
-engine = create_engine('sqlite:///../data/YourDatabaseName.db')
-df = pd.read_sql_table('YourTableName', engine)
+engine = create_engine('sqlite:///../data/DisasterResponse.db')
+df = pd.read_sql_table('message', engine)
 
 # load model
-model = joblib.load("../models/your_model_name.pkl")
+model = joblib.load("../models/classifier.pkl")
 
 
 # index webpage displays cool visuals and receives user input text for model
@@ -38,30 +42,68 @@ model = joblib.load("../models/your_model_name.pkl")
 @app.route('/index')
 def index():
     
+    # Message and label example
+    messages_categories = []
+    df_sample = df.sample(3)
+    for idx, row in df_sample.iterrows():
+        message_category = {}
+        message_category['message'] = row['message']
+        cates = []
+        for cate, cls_result in row.items():
+            if cls_result == 1:
+                cates.append(cate)
+        message_category['categories'] = ' ,'.join(cates)
+        messages_categories.append(message_category)
+
     # extract data needed for visuals
-    # TODO: Below is an example - modify to extract data for your own visuals
-    genre_counts = df.groupby('genre').count()['message']
+    
+    # Graph#1: Genre Counts Bar Chart
+    genre_counts = df.groupby('genre').count()['message'].sort_values()
     genre_names = list(genre_counts.index)
     
+    # Graph#2: 
+    df_cate = df.drop(['id', 'message', 'original', 'genre'], axis=1)
+    category_counts = df_cate.sum().sort_values(ascending=False)
+    category_names = df_cate.columns
+
     # create visuals
-    # TODO: Below is an example - modify to create your own visuals
     graphs = [
         {
             'data': [
                 Bar(
-                    x=genre_names,
-                    y=genre_counts
+                    x=genre_counts,
+                    y=genre_names,
+                    orientation = 'h'
                 )
             ],
-
             'layout': {
                 'title': 'Distribution of Message Genres',
                 'yaxis': {
-                    'title': "Count"
+                    'title': "Genre",
                 },
                 'xaxis': {
-                    'title': "Genre"
-                }
+                    'title': "Count"
+                },
+                'margin': dict(l=120,r=10,t=140,b=80)
+            }
+        },
+         {
+            'data': [
+                Bar(
+                    x=category_names,
+                    y=category_counts,
+                    marker=dict(color='rgb(221,130,79)')
+                )
+            ],
+            'layout': {
+                'title': 'Labels',
+                'yaxis': {
+                    'title': "Count",
+                },
+                'xaxis': {
+                    'title': "Label"
+                },
+                'margin': dict(l=120,r=10,t=140,b=80)
             }
         }
     ]
@@ -71,7 +113,7 @@ def index():
     graphJSON = json.dumps(graphs, cls=plotly.utils.PlotlyJSONEncoder)
     
     # render web page with plotly graphs
-    return render_template('master.html', ids=ids, graphJSON=graphJSON)
+    return render_template('master.html', ids=ids, graphJSON=graphJSON, messages_categories=messages_categories)
 
 
 # web page that handles user query and displays model results
